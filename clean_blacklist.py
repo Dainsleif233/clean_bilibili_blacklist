@@ -30,13 +30,22 @@ def login(session):
     time.sleep(times)
     print("登录状态验证：", login.json().get('data', {}).get('isLogin'))
 
+def getTotalPages():
+    while True:
+        response = session.get("https://api.bilibili.com/x/relation/blacks?ps=50&pn=1")
+        time.sleep(times)
+        total = response.json().get('data', {}).get('total')
+        if response.status_code == 200 and isinstance(total, int):
+            break
+    return total
+    
 def getBlacklist(removeList, page):
-    response = session.get(f"https://api.bilibili.com/x/relation/blacks?ps=50&pn={page}")
-    if response.status_code != 200:
-        print(response.text)
-    time.sleep(times)
+    while True:
+        response = session.get(f"https://api.bilibili.com/x/relation/blacks?ps=50&pn={page}")
+        time.sleep(times)
+        if response.status_code == 200:
+            break
     blackList = response.json().get('data', {}).get('list', [])
-    total = response.json().get('data', {}).get('total')
     for item in blackList:
         mid = item.get('mid')
         uname = item.get('uname')
@@ -47,23 +56,24 @@ def getBlacklist(removeList, page):
             print(f"UID：{mid}")
             continue
         signed_params = reverse(0, mid)
-        info = session.get("https://api.bilibili.com/x/space/wbi/acc/info", params=signed_params)
-        if info.status_code != 200:
-            print(info.text)
-        time.sleep(times)
+        while True:
+            info = session.get("https://api.bilibili.com/x/space/wbi/acc/info", params=signed_params)
+            time.sleep(times)
+            if info.status_code == 200:
+                break
         if info.json().get('data', {}).get('silence') == 1:
             removeList.append(mid)
             print("----------------------")
             print(f"用户名：{uname}")
             print(f"UID：{mid}")
-    return removeList, total
 
 def getRemoveList():
     page = 1
-    total = 0
+    total = getTotalPages()
     removeList = []
     while page <= total // 50 + 1:
-        removeList, total = getBlacklist(removeList, page)
+        print(f"获取第 {page} 页...")
+        getBlacklist(removeList, page)
         page += 1
     return removeList
 
@@ -72,11 +82,12 @@ def clean(removeList):
     print("开始清理黑名单")
     csrf = cookies.get('bili_jct')
     for mid in removeList:
-        response = session.post("https://api.bilibili.com/x/relation/modify", data={"fid": mid, "csrf": csrf, "act": 6})
-        if response.status_code != 200:
-            print(response.text)
+        while True:
+            response = session.post("https://api.bilibili.com/x/relation/modify", data={"fid": mid, "csrf": csrf, "act": 6})
+            time.sleep(times)
+            if response.status_code == 200:
+                break
         print(f"已清理UID:{mid}")
-        time.sleep(times)
     print("----------------------")
     print(f"成功清理{removeList.__len__()}项黑名单")
 
